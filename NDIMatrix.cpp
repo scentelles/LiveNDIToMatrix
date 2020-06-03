@@ -49,8 +49,22 @@ bool copying = false;
 bool syncing = false;
 bool newFrame = false;
 
+float alpha 	= 1;
+float red 	= 1;
+float green 	= 1;
+float blue 	= 1;
+
 FrameCanvas *offscreen_canvas;
 RGBMatrix *matrix;
+
+#define OSCPKT_OSTREAM_OUTPUT
+#include "oscpkt/oscpkt.hh"
+#include "oscpkt/udp.hh"
+using namespace oscpkt;
+UdpSocket sock; 
+const int PORT_NUM = 7701; //TODO : get this from args
+
+
 
 volatile bool interrupt_received = false;
 static void InterruptHandler(int) {
@@ -100,6 +114,60 @@ void set_priority(int priority) {
 }
 
 
+//TODO : use a json config file
+void runOSCServer() {
+
+    sock.bindTo(PORT_NUM);
+    if (!sock.isOk()) {
+      cerr << "Error opening port " << PORT_NUM << ": " << sock.errorMessage() << "\n";
+    }
+    else {
+      cout << "Server started, will listen to packets on port " << PORT_NUM << std::endl;
+      PacketReader pr;
+      PacketWriter pw;
+      while (sock.isOk()) {      
+	if (sock.receiveNextPacket(30 /* timeout, in ms */)) {
+          pr.init(sock.packetData(), sock.packetSize());
+          oscpkt::Message *msg;
+          while (pr.isOk() && (msg = pr.popMessage()) != 0) {
+              float tempF;
+              cout << "ADDRESS : " << msg->address << endl;
+
+
+	      if (msg->match("/1/fader1").popFloat(tempF)) {
+
+		    alpha = tempF;
+		    cout << "Setting alpha : " << alpha << endl;
+	      }
+	      if (msg->match("/1/rotary1").popFloat(tempF)) {
+
+		    red = tempF;
+	    	    cout << "Setting Red Multiply : " << red << endl;
+	      }	  
+	      if (msg->match("/1/rotary2").popFloat(tempF)) {
+
+		    green = tempF;
+		    //green = 255 * tempF;
+	    	    cout << "Setting Green Multiply  : " << green << endl;
+	      }		  
+	      if (msg->match("/1/rotary3").popFloat(tempF)) {
+
+		    blue = tempF;
+//		    blue = 255 * tempF;
+
+	    	    cout << "Setting Blue Multiply  : " << blue << endl;
+	      }	
+          }
+        }
+      }
+    }
+  
+}
+
+
+
+
+
 void CopyFrame(NDIlib_video_frame_v2_t * video_frame, FrameCanvas * canvas) {
 
     copying = true;
@@ -111,7 +179,10 @@ void CopyFrame(NDIlib_video_frame_v2_t * video_frame, FrameCanvas * canvas) {
 	int indexG = (h*video_frame->xres + w)*4+1;
 	int indexR = (h*video_frame->xres + w)*4+2;
 
-	canvas->SetPixel(w, h, video_frame->p_data[indexR], video_frame->p_data[indexG], video_frame->p_data[indexB]);
+	//canvas->SetPixel(w, h, (std::min(video_frame->p_data[indexR]+int(red), 255))*alpha, (std::min(video_frame->p_data[indexG]+ int(green), 255))*alpha, (std::min(video_frame->p_data[indexB]+int(blue), 255))*alpha);
+
+	canvas->SetPixel(w, h, video_frame->p_data[indexR]*red*alpha, video_frame->p_data[indexG]*green*alpha, video_frame->p_data[indexB]*blue*alpha);
+
       }	
     }
     copying = false;
@@ -337,7 +408,10 @@ int main(int argc, char *argv[]) {
   }
 	
 	
-	
+//Start OSC server
+  std::thread ocsThread (runOSCServer);     
+  ocsThread.detach();
+  sleep(5);	
 	 
 //Start MATRIX loop
   std::thread matrixThread (runMatrix);  
