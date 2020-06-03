@@ -25,6 +25,8 @@
 
 #include <sched.h>
 
+#include <libconfig.h++>
+using namespace libconfig;
 
 using std::endl;
 using std::cout;
@@ -61,10 +63,18 @@ RGBMatrix *matrix;
 #include "oscpkt/oscpkt.hh"
 #include "oscpkt/udp.hh"
 using namespace oscpkt;
+using namespace std;
+
 UdpSocket sock; 
-const int PORT_NUM = 7701; //TODO : get this from args
+int OSC_PORT_NUM = 0;
 
 
+string OSC_CONTROL_ALPHA;
+string OSC_CONTROL_RED;
+string OSC_CONTROL_GREEN;
+string OSC_CONTROL_BLUE;
+
+string OBS_NDI_SOURCE;
 
 volatile bool interrupt_received = false;
 static void InterruptHandler(int) {
@@ -98,7 +108,7 @@ void set_priority(int priority) {
      int policy = 0;
      ret = pthread_getschedparam(this_thread, &policy, &params);
      if (ret != 0) {
-         std::cout << "Couldn't retrieve scheduling paramers" << std::endl;
+         std::cout << "Couldn't retrieve scheduling parameters" << std::endl;
          return;
      }
  
@@ -117,12 +127,12 @@ void set_priority(int priority) {
 //TODO : use a json config file
 void runOSCServer() {
 
-    sock.bindTo(PORT_NUM);
+    sock.bindTo(OSC_PORT_NUM);
     if (!sock.isOk()) {
-      cerr << "Error opening port " << PORT_NUM << ": " << sock.errorMessage() << "\n";
+      cerr << "Error opening port " << OSC_PORT_NUM << ": " << sock.errorMessage() << "\n";
     }
     else {
-      cout << "Server started, will listen to packets on port " << PORT_NUM << std::endl;
+      cout << "Server started, will listen to packets on port " << OSC_PORT_NUM << std::endl;
       PacketReader pr;
       PacketWriter pw;
       while (sock.isOk()) {      
@@ -133,28 +143,24 @@ void runOSCServer() {
               float tempF;
               cout << "ADDRESS : " << msg->address << endl;
 
-
-	      if (msg->match("/1/fader1").popFloat(tempF)) {
+	      if (msg->match(OSC_CONTROL_ALPHA).popFloat(tempF)) {
 
 		    alpha = tempF;
 		    cout << "Setting alpha : " << alpha << endl;
 	      }
-	      if (msg->match("/1/rotary1").popFloat(tempF)) {
+	      if (msg->match(OSC_CONTROL_RED).popFloat(tempF)) {
 
 		    red = tempF;
 	    	    cout << "Setting Red Multiply : " << red << endl;
 	      }	  
-	      if (msg->match("/1/rotary2").popFloat(tempF)) {
+	      if (msg->match(OSC_CONTROL_GREEN).popFloat(tempF)) {
 
 		    green = tempF;
-		    //green = 255 * tempF;
 	    	    cout << "Setting Green Multiply  : " << green << endl;
 	      }		  
-	      if (msg->match("/1/rotary3").popFloat(tempF)) {
+	      if (msg->match(OSC_CONTROL_BLUE).popFloat(tempF)) {
 
 		    blue = tempF;
-//		    blue = 255 * tempF;
-
 	    	    cout << "Setting Blue Multiply  : " << blue << endl;
 	      }	
           }
@@ -285,10 +291,10 @@ void runNDIReceiver(std::string sourceName)
 		}
 	}
 	
-	  if (interrupt_received) {
-    // Feedback for Ctrl-C, but most importantly, force a newline
-    // at the output, so that commandline-shell editing is not messed up.
-    fprintf(stderr, "Got interrupt. Exiting\n");
+	if (interrupt_received) {
+    	// Feedback for Ctrl-C, but most importantly, force a newline
+    	// at the output, so that commandline-shell editing is not messed up.
+    	fprintf(stderr, "Got interrupt. Exiting\n");
 	
 
 	// Destroy the receiver
@@ -373,23 +379,82 @@ void runMatrix()
 
 }
 
+int readConfigInt(Config &cfg, string name)
+{
+  int result=0;
+  try
+  {
+    result = cfg.lookup(name);
+    cout << "Config : " << name << " : " << result << endl;
+  }
+  catch(const SettingNotFoundException &nfex)
+  {
+    cerr << "No " << name << " setting in configuration file." << endl;
+  }
+  return result;
+
+}
 
 
+
+string readConfigString(Config &cfg, string name)
+{
+  string result;
+  try
+  {
+    string tempS = cfg.lookup(name);
+    result = tempS;
+    cout << "Config : " << name << " : " << result << endl;
+  }
+  catch(const SettingNotFoundException &nfex)
+  {
+    cerr << "No " << name << " setting in configuration file." << endl;
+  }
+  return result;
+
+}
 
 int main(int argc, char *argv[]) {
 
   signal(SIGTERM, InterruptHandler);
   signal(SIGINT, InterruptHandler);
 
+  Config cfg;
 
-//RGB Matrix
+  // Read the file. If there is an error, report it and exit.
+  try
+  {
+    cfg.readFile("config.cfg");
+  }
+  catch(const FileIOException &fioex)
+  {
+    std::cerr << "I/O error while reading file." << std::endl;
+    return(EXIT_FAILURE);
+  }
+  catch(const ParseException &pex)
+  {
+    std::cerr << "Parse error at " << pex.getFile() << ":" << pex.getLine()
+              << " - " << pex.getError() << std::endl;
+    return(EXIT_FAILURE);
+  }
+
+ 
+  OSC_PORT_NUM      = readConfigInt(cfg, "OSC_PORT_NUM");
+  OSC_CONTROL_ALPHA = readConfigString(cfg, "OSC_CONTROL_ALPHA");
+  OSC_CONTROL_RED   = readConfigString(cfg, "OSC_CONTROL_RED");
+  OSC_CONTROL_GREEN = readConfigString(cfg, "OSC_CONTROL_GREEN");
+  OSC_CONTROL_BLUE  = readConfigString(cfg, "OSC_CONTROL_BLUE");
+
+  OBS_NDI_SOURCE    = readConfigString(cfg, "OBS_NDI_SOURCE");
+
+
+  //RGB Matrix
   RGBMatrix::Options matrix_options;
   rgb_matrix::RuntimeOptions runtime_opt;
   if (!rgb_matrix::ParseOptionsFromFlags(&argc, &argv,
                                          &matrix_options, &runtime_opt)) {
     return usage(argv[0]);
   }
-
 
 
   int opt;
@@ -400,24 +465,22 @@ int main(int argc, char *argv[]) {
     }
   }
 
-
-
   matrix = CreateMatrixFromOptions(matrix_options, runtime_opt);
   if (matrix == NULL) {
     return 1;
   }
 	
 	
-//Start OSC server
+  //Start OSC server
   std::thread ocsThread (runOSCServer);     
   ocsThread.detach();
-  sleep(5);	
 	 
-//Start MATRIX loop
+  //Start MATRIX loop
   std::thread matrixThread (runMatrix);  
   matrixThread.detach();
 
-  std::thread NDIThread (runNDIReceiver, "OBS-SLYZIC");  
+  //Start NDI receive thread
+  std::thread NDIThread (runNDIReceiver, OBS_NDI_SOURCE);  
   NDIThread.detach();
 
 

@@ -19,7 +19,7 @@ RGB_LIBDIR=$(RGB_LIB_DISTRIBUTION)/lib
 RGB_LIBRARY_NAME=rgbmatrix
 RGB_LIBRARY=$(RGB_LIBDIR)/lib$(RGB_LIBRARY_NAME).a
 
-LDFLAGS+=-L$(RGB_LIBDIR) -L$(NDI_SDK_DIRECTORY)/lib/arm-newtek-linux-gnueabihf  -l$(RGB_LIBRARY_NAME) -lrt -lm -lpthread -lndi
+LDFLAGS+=-L$(RGB_LIBDIR) -L$(NDI_SDK_DIRECTORY)/lib/arm-newtek-linux-gnueabihf  -l$(RGB_LIBRARY_NAME) -lrt -lm -lpthread -lndi -lconfig++
 
 # Imagemagic flags, only needed if actually compiled.
 MAGICK_CXXFLAGS?=`GraphicsMagick++-config --cppflags --cxxflags`
