@@ -150,30 +150,26 @@ void set_low_priority() {
 
 void CopyFrame(NDIlib_video_frame_v2_t * video_frame, FrameCanvas * canvas) {
 
-copying = true;
-//printf("copying frame to canvas\n");
-for(int h=0; h < 128; h++)
-{
-  for(int w=0; w < 128; w++)
-  {
-    int indexB = (h*video_frame->xres + w)*4;
-    int indexG = (h*video_frame->xres + w)*4+1;
-    int indexR = (h*video_frame->xres + w)*4+2;
+    copying = true;
+    for(int h=0; h < canvas->height(); h++)
+    {
+      for(int w=0; w < canvas->width(); w++)
+      {
+	int indexB = (h*video_frame->xres + w)*4;
+	int indexG = (h*video_frame->xres + w)*4+1;
+	int indexR = (h*video_frame->xres + w)*4+2;
 
-  
-    canvas->SetPixel(w, h, video_frame->p_data[indexR], video_frame->p_data[indexG], video_frame->p_data[indexB]);
-
-  }	
-}
-copying = false;
+	canvas->SetPixel(w, h, video_frame->p_data[indexR], video_frame->p_data[indexG], video_frame->p_data[indexB]);
+      }	
+    }
+    copying = false;
 
 }
 
-int runNDIReceiver(std::string sourceName, int width, int height)
+int runNDIReceiver(std::string sourceName)
 {
 
 	set_low_priority();
-	
 	
 	
 	if (!NDIlib_initialize()) return 0;
@@ -243,34 +239,9 @@ int runNDIReceiver(std::string sourceName, int width, int height)
 			// Video data
 			case NDIlib_frame_type_video:
 			//	printf("Video data received (%dx%d).\n", video_frame.xres, video_frame.yres);
-				
-				//display here video_frame
-				data = video_frame.p_data;
-				//printf("Frame size : %d\n", video_frame.line_stride_in_bytes);
-				//printf("Frame fourCC : %d\n", video_frame.FourCC);
-				
-				//printf("going thru loop width : %d\n", finalImage.width);
-				for(int x = 0; x < video_frame.xres; x++)
-				{
-					for(int y = 0; y < video_frame.yres; y++)
-					{
-						//printf ("x : %d, y : %d", x, y);
-						//int indexB = (y*finalImage.width + x)*2+1;
-					    int indexB = (y*video_frame.xres + x)*4;
-					    int indexG = (y*video_frame.xres + x)*4 + 1;
- 					    int indexR = (y*video_frame.xres + x)*4 + 2;
 
-
-							
-					}
-				}
-				
-				
-				//if(syncing == false)
-				//{
-					CopyFrame(&video_frame, offscreen_canvas);
-					newFrame = true;
-				//}
+				CopyFrame(&video_frame, offscreen_canvas);
+				newFrame = true;
 
 				
 				NDIlib_recv_free_video_v2(pNDI_recv, &video_frame);
@@ -348,6 +319,7 @@ int runMatrix()
   set_realtime_priority();
 	
   offscreen_canvas = matrix->CreateFrameCanvas();
+  printf("Started matrix with resolution : w:%d, h:%d\n", offscreen_canvas->width(), offscreen_canvas->height()); 
 
 
   int vsync_multiple = 1;
@@ -365,7 +337,7 @@ int runMatrix()
 		//{
         		offscreen_canvas = matrix->SwapOnVSync(offscreen_canvas,
                                                 	   vsync_multiple);
-		//	newFrame = false;
+			newFrame = false;
 		//}
 		//syncing = false;
 //	}											   
@@ -414,7 +386,7 @@ int main(int argc, char *argv[]) {
   std::thread matrixThread (runMatrix);  
   matrixThread.detach();
 
-  std::thread NDIThread (runNDIReceiver, "OBS-SLYZIC", 128, 128);  
+  std::thread NDIThread (runNDIReceiver, "OBS-SLYZIC");  
   NDIThread.detach();
 
 

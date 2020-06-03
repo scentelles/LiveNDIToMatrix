@@ -1,20 +1,20 @@
 NDI_SDK_DIRECTORY=/home/pi/NDISDK/NDISDK2
-
+NDI_SDK_INCLUDE=$(NDI_SDK_DIRECTORY)/include
 
 CXXFLAGS=-Wall -O3 -g -Wextra -Wno-unused-parameter -D_FILE_OFFSET_BITS=64
 #for profiling
 #CXXFLAGS=-Wall -pg -O3 -g -Wextra -Wno-unused-parameter -D_FILE_OFFSET_BITS=64
 
 OBJECTS=led-image-viewer.o text-scroller.o projectm-image-viewer.o app-launcher.o
-BINARIES=led-image-viewer text-scroller projectm-image-viewer app-launcher
+BINARIES=NDIMatrix
 
 OPTIONAL_OBJECTS=video-viewer.o projectm-video-viewer.o
 OPTIONAL_BINARIES=video-viewer projectm-video-viewer
 
 # Where our library resides. You mostly only need to change the
 # RGB_LIB_DISTRIBUTION, this is where the library is checked out.
-RGB_LIB_DISTRIBUTION=/home/pi/rpi-rgb-led-matrix
-RGB_INCDIR=$(RGB_LIB_DISTRIBUTION)/include -I$(NDI_SDK_DIRECTORY)/include
+RGB_LIB_DISTRIBUTION=/home/pi/Project/rpi-rgb-led-matrix
+RGB_INCDIR=$(RGB_LIB_DISTRIBUTION)/include 
 RGB_LIBDIR=$(RGB_LIB_DISTRIBUTION)/lib
 RGB_LIBRARY_NAME=rgbmatrix
 RGB_LIBRARY=$(RGB_LIBDIR)/lib$(RGB_LIBRARY_NAME).a
@@ -40,7 +40,7 @@ NDIMatrix: NDIMatrix.o $(RGB_LIBRARY)
 
 
 NDIMatrix.o: NDIMatrix.cpp
-	$(CXX) -I$(RGB_INCDIR) $(CXXFLAGS) -Wno-deprecated-declarations -c -o $@ $<
+	$(CXX) -I$(RGB_INCDIR) -I$(NDI_SDK_INCLUDE) $(CXXFLAGS) -Wno-deprecated-declarations -c -o $@ $<
 
 
 clean:
