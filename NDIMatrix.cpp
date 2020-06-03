@@ -59,93 +59,45 @@ static void InterruptHandler(int) {
 }
 
 
-
-void set_realtime_priority() {
+void set_priority(int priority) {
      int ret;
  
      // We'll operate on the currently running thread.
      pthread_t this_thread = pthread_self();
 
-
-
      // struct sched_param is used to store the scheduling priority
      struct sched_param params;
  
      // We'll set the priority to the maximum.
-     params.sched_priority = sched_get_priority_max(SCHED_RR);
-  std::cout << "Trying to set thread realtime prio = " << params.sched_priority << std::endl;
+     params.sched_priority = sched_get_priority_max(priority);
+     std::cout << "Trying to set thread prio = " << params.sched_priority << std::endl;
  
-     // Attempt to set thread real-time priority to the SCHED_RR policy
-     ret = pthread_setschedparam(this_thread, SCHED_RR, &params);
+     // Attempt to set thread priority to the SCHED_RR policy
+     ret = pthread_setschedparam(this_thread, priority, &params);
      if (ret != 0) {
          // Print the error
-         std::cout << "Unsuccessful in setting thread realtime prio" << std::endl;
+         std::cout << "Unsuccessful in setting thread prio" << std::endl;
          return;     
      }
 
- // Now verify the change in thread priority
+     // Now verify the change in thread priority
      int policy = 0;
      ret = pthread_getschedparam(this_thread, &policy, &params);
      if (ret != 0) {
-         std::cout << "Couldn't retrieve real-time scheduling paramers" << std::endl;
+         std::cout << "Couldn't retrieve scheduling paramers" << std::endl;
          return;
      }
  
      // Check the correct policy was applied
-     if(policy != SCHED_RR) {
-         std::cout << "Scheduling is NOT SCHED_RR!" << std::endl;
+     if(policy != priority) {
+         std::cout << "Scheduling is NOT !" << priority << std::endl;
      } else {
-         std::cout << "SCHED_RR OK" << std::endl;
+         std::cout << "Scheduling prio change OK" << priority << std::endl;
      }
  
      // Print thread scheduling priority
      std::cout << "Thread priority is " << params.sched_priority << std::endl; 
 }
-
-
-
-void set_low_priority() {
-     int ret;
- 
-     // We'll operate on the currently running thread.
-     pthread_t this_thread = pthread_self();
-
-
-
-     // struct sched_param is used to store the scheduling priority
-     struct sched_param params;
- 
-     // We'll set the priority to the maximum.
-     params.sched_priority = sched_get_priority_max(SCHED_IDLE);
-  std::cout << "Trying to set thread realtime prio = " << params.sched_priority << std::endl;
- 
-     // Attempt to set thread real-time priority to the SCHED_IDLE policy
-     ret = pthread_setschedparam(this_thread, SCHED_IDLE, &params);
-     if (ret != 0) {
-         // Print the error
-         std::cout << "Unsuccessful in setting thread realtime prio" << std::endl;
-         return;     
-     }
-
- // Now verify the change in thread priority
-     int policy = 0;
-     ret = pthread_getschedparam(this_thread, &policy, &params);
-     if (ret != 0) {
-         std::cout << "Couldn't retrieve real-time scheduling paramers" << std::endl;
-         return;
-     }
- 
-     // Check the correct policy was applied
-     if(policy != SCHED_IDLE) {
-         std::cout << "Scheduling is NOT SCHED_IDLE!" << std::endl;
-     } else {
-         std::cout << "SCHED_IDLE OK" << std::endl;
-     }
- 
-     // Print thread scheduling priority
-     std::cout << "Thread priority is " << params.sched_priority << std::endl; 
-}
-
 
 
 void CopyFrame(NDIlib_video_frame_v2_t * video_frame, FrameCanvas * canvas) {
@@ -166,18 +118,24 @@ void CopyFrame(NDIlib_video_frame_v2_t * video_frame, FrameCanvas * canvas) {
 
 }
 
-int runNDIReceiver(std::string sourceName)
+void runNDIReceiver(std::string sourceName)
 {
 
-	set_low_priority();
+	set_priority(SCHED_IDLE);
 	
 	
-	if (!NDIlib_initialize()) return 0;
-	
+	if (!NDIlib_initialize())
+	{
+	    cout << "ERROR : Failed to intialize NDI" << endl;
+	    return;
+	}
 	// Create a finder
 	NDIlib_find_instance_t pNDI_find = NDIlib_find_create_v2();
-	if (!pNDI_find) return 0;
-
+	if (!pNDI_find)
+	{
+	    cout << "ERROR : Failed to create NDI finder" << endl;
+	    return;
+	}
 	// Wait until there is one source
 	uint32_t no_sources = 0;
 	const NDIlib_source_t* p_sources = NULL;
@@ -189,7 +147,7 @@ int runNDIReceiver(std::string sourceName)
 		NDIlib_find_wait_for_sources(pNDI_find, 1000/* One second */);
 		p_sources = NDIlib_find_get_current_sources(pNDI_find, &no_sources);
 	
-		for (int i = 0; i < no_sources; i++)
+		for (unsigned int i = 0; i < no_sources; i++)
 		{
 			std::string tempS = p_sources[i].p_ndi_name;
 			printf("%u. %s\n", i+1, tempS.c_str());
@@ -198,8 +156,6 @@ int runNDIReceiver(std::string sourceName)
 				printf("FOUND REQUESTED NDI SOURCE : %s in %s", sourceName.c_str(), tempS.c_str()); 
 				p_requested_source = &p_sources[i];
 			}
-		
-		
 		}
 	}
 	
@@ -212,7 +168,11 @@ int runNDIReceiver(std::string sourceName)
 	//setting.bandwidth = NDIlib_recv_bandwidth_highest;
 	
 	NDIlib_recv_instance_t pNDI_recv = NDIlib_recv_create_v3(&setting);
-	if (!pNDI_recv) return 0;
+	if (!pNDI_recv)
+	{
+	    cout << "ERROR : Failed to create NDI receiver instance" << endl;
+	    return;
+	}
 
 	// Connect to our sources
 	NDIlib_recv_connect(pNDI_recv, p_requested_source);
@@ -220,9 +180,6 @@ int runNDIReceiver(std::string sourceName)
 	// Destroy the NDI finder. We needed to have access to the pointers to p_sources[0]
 	NDIlib_find_destroy(pNDI_find);	
 
-
-
-	unsigned char* data;
 
 	printf("starting to loop ...\n");
 	while (!interrupt_received) //TODO : catch interrupt
@@ -313,10 +270,10 @@ static int usage(const char *progname, const char *msg = nullptr) {
 
 
 
-int runMatrix()
+void runMatrix()
 {
 
-  set_realtime_priority();
+  set_priority(SCHED_FIFO);
 	
   offscreen_canvas = matrix->CreateFrameCanvas();
   printf("Started matrix with resolution : w:%d, h:%d\n", offscreen_canvas->width(), offscreen_canvas->height()); 
