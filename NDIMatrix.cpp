@@ -56,7 +56,11 @@ float red 	= 1;
 float green 	= 1;
 float blue 	= 1;
 
-FrameCanvas *offscreen_canvas;
+FrameCanvas *offscreen_canvas1;
+FrameCanvas *offscreen_canvas2;
+FrameCanvas **active_frame_ref;
+
+
 RGBMatrix *matrix;
 
 #define OSCPKT_OSTREAM_OUTPUT
@@ -273,9 +277,18 @@ void runNDIReceiver(std::string sourceName)
 			// Video data
 			case NDIlib_frame_type_video:
 			//	printf("Video data received (%dx%d).\n", video_frame.xres, video_frame.yres);
-
-				CopyFrame(&video_frame, offscreen_canvas);
-				newFrame = true;
+				if(active_frame_ref == &offscreen_canvas1)
+				{
+				  //cout << "copying to frame 2 " << endl;
+				  CopyFrame(&video_frame, offscreen_canvas2);
+				  active_frame_ref = &offscreen_canvas2;
+				}
+				else
+				{
+				  //cout << "copying to frame 1 " << endl;
+				  CopyFrame(&video_frame, offscreen_canvas1);
+				  active_frame_ref = &offscreen_canvas1;
+				}
 
 				
 				NDIlib_recv_free_video_v2(pNDI_recv, &video_frame);
@@ -352,8 +365,10 @@ void runMatrix()
 
   set_priority(SCHED_FIFO);
 	
-  offscreen_canvas = matrix->CreateFrameCanvas();
-  printf("Started matrix with resolution : w:%d, h:%d\n", offscreen_canvas->width(), offscreen_canvas->height()); 
+  offscreen_canvas1 = matrix->CreateFrameCanvas();
+  offscreen_canvas2 = matrix->CreateFrameCanvas();  
+  active_frame_ref = &offscreen_canvas1;
+  printf("Started matrix with resolution : w:%d, h:%d\n", offscreen_canvas1->width(), offscreen_canvas1->height()); 
 
 
   int vsync_multiple = 1;
@@ -369,9 +384,10 @@ void runMatrix()
 		//syncing = true;//TODO : instead of syncing, swap with temporary buffer
 		//if(newFrame == true)
 		//{
-        		offscreen_canvas = matrix->SwapOnVSync(offscreen_canvas,
-                                                	   vsync_multiple);
-			newFrame = false;
+        		//*active_frame_ref = matrix->SwapOnVSync(*active_frame_ref,
+                        //                        	   vsync_multiple);
+			matrix->SwapOnVSync(*active_frame_ref, vsync_multiple);
+			newFrame = true;
 		//}
 		//syncing = false;
 //	}											   
@@ -394,7 +410,6 @@ int readConfigInt(Config &cfg, string name)
   return result;
 
 }
-
 
 
 string readConfigString(Config &cfg, string name)
