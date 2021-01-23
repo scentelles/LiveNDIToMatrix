@@ -1,12 +1,12 @@
 NDI_SDK_DIRECTORY=/home/pi/NDISDK/NDISDK2
 NDI_SDK_INCLUDE=$(NDI_SDK_DIRECTORY)/include
 
-CXXFLAGS=-Wall -O3 -g -Wextra -Wno-unused-parameter -D_FILE_OFFSET_BITS=64
+CXXFLAGS=-Wall -O3 -Wextra -Wno-unused-parameter -D_FILE_OFFSET_BITS=64 `pkg-config opencv --cflags --libs`
 #for profiling
 #CXXFLAGS=-Wall -pg -O3 -g -Wextra -Wno-unused-parameter -D_FILE_OFFSET_BITS=64
 
 OBJECTS=led-image-viewer.o text-scroller.o projectm-image-viewer.o app-launcher.o
-BINARIES=NDIMatrix
+BINARIES=UVCMatrix
 
 OPTIONAL_OBJECTS=video-viewer.o projectm-video-viewer.o
 OPTIONAL_BINARIES=video-viewer projectm-video-viewer
@@ -31,15 +31,15 @@ all : $(BINARIES)
 $(RGB_LIBRARY): FORCE
 	$(MAKE) -C $(RGB_LIBDIR)
 
-NDIMatrix: NDIMatrix.o $(RGB_LIBRARY)
-	$(CXX) $(CXXFLAGS) NDIMatrix.o -o $@ $(LDFLAGS) 
+UVCMatrix: UVCMatrix.o $(RGB_LIBRARY)
+	$(CXX) $(CXXFLAGS) UVCMatrix.o -o $@ $(LDFLAGS) 
 
 
 %.o : %.cc
 	$(CXX) -I$(RGB_INCDIR) $(CXXFLAGS) -c -o $@ $<
 
 
-NDIMatrix.o: NDIMatrix.cpp
+UVCMatrix.o: UVCMatrix.cpp
 	$(CXX) -I$(RGB_INCDIR) -I$(NDI_SDK_INCLUDE) $(CXXFLAGS) -Wno-deprecated-declarations -c -o $@ $<
 
 

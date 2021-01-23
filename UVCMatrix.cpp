@@ -19,6 +19,10 @@
 #include <iostream>
 
 
+#include "opencv2/opencv.hpp"
+using namespace cv;
+
+
 #include <thread>         // std::thread
 
 #include <Processing.NDI.Lib.h>
@@ -49,17 +53,18 @@ bool imageStarted = false;
 #define UPDATE_MULTIPLE 2
 bool copying = false;
 bool syncing = false;
-bool newFrame = false;
+//bool newFrame = false;
 
 float alpha 	= 1;
 float red 	= 1;
 float green 	= 1;
 float blue 	= 1;
+int   strobe	= 0;
 
 FrameCanvas *offscreen_canvas1;
 FrameCanvas *offscreen_canvas2;
 FrameCanvas **active_frame_ref;
-
+FrameCanvas *canvas_black;
 
 RGBMatrix *matrix;
 
@@ -77,6 +82,8 @@ string OSC_CONTROL_ALPHA;
 string OSC_CONTROL_RED;
 string OSC_CONTROL_GREEN;
 string OSC_CONTROL_BLUE;
+string OSC_CONTROL_STROBE;
+
 
 string OBS_NDI_SOURCE;
 
@@ -144,29 +151,36 @@ void runOSCServer() {
           pr.init(sock.packetData(), sock.packetSize());
           oscpkt::Message *msg;
           while (pr.isOk() && (msg = pr.popMessage()) != 0) {
-              float tempF;
+              //float tempF;
+	      int tempI;
               cout << "ADDRESS : " << msg->address << endl;
 
-	      if (msg->match(OSC_CONTROL_ALPHA).popFloat(tempF)) {
+	      if (msg->match(OSC_CONTROL_ALPHA).popInt32(tempI)) {
 
-		    alpha = tempF;
+		    alpha = float(tempI)/255;
 		    cout << "Setting alpha : " << alpha << endl;
 	      }
-	      if (msg->match(OSC_CONTROL_RED).popFloat(tempF)) {
+	      if (msg->match(OSC_CONTROL_RED).popInt32(tempI)) {
 
-		    red = tempF;
+		    red = float(tempI)/255;
 	    	    cout << "Setting Red Multiply : " << red << endl;
 	      }	  
-	      if (msg->match(OSC_CONTROL_GREEN).popFloat(tempF)) {
+	      if (msg->match(OSC_CONTROL_GREEN).popInt32(tempI)) {
 
-		    green = tempF;
+		    green = float(tempI)/255;
 	    	    cout << "Setting Green Multiply  : " << green << endl;
 	      }		  
-	      if (msg->match(OSC_CONTROL_BLUE).popFloat(tempF)) {
+	      if (msg->match(OSC_CONTROL_BLUE).popInt32(tempI)) {
 
-		    blue = tempF;
+		    blue = float(tempI)/255;
 	    	    cout << "Setting Blue Multiply  : " << blue << endl;
 	      }	
+	      if (msg->match(OSC_CONTROL_STROBE).popInt32(tempI)) {
+
+		    strobe = tempI;
+	    	    cout << "Setting Strobe  : " << strobe << endl;
+	      }	
+
           }
         }
       }
@@ -198,6 +212,93 @@ void CopyFrame(NDIlib_video_frame_v2_t * video_frame, FrameCanvas * canvas) {
     copying = false;
 
 }
+
+void CopyFrame(Mat * video_frame, FrameCanvas * canvas) {
+
+    copying = true;
+    for(int h=0; h < canvas->height(); h++)
+    {
+      for(int w=0; w < canvas->width(); w++)
+      {
+	//int indexB = (h*video_frame->xres + w)*4;
+	//int indexG = (h*video_frame->xres + w)*4+1;
+	//int indexR = (h*video_frame->xres + w)*4+2;
+unsigned char * p = video_frame->ptr(h, w); // Y first, X after
+//p[0] = 0;   // B
+//p[1] = 0;   // G
+//p[2] = 255; // R
+
+	//canvas->SetPixel(w, h, (std::min(video_frame->p_data[indexR]+int(red), 255))*alpha, (std::min(video_frame->p_data[indexG]+ int(green), 255))*alpha, (std::min(video_frame->p_data[indexB]+int(blue), 255))*alpha);
+
+	//canvas->SetPixel(w, h, video_frame->p_data[indexR]*red*alpha, video_frame->p_data[indexG]*green*alpha, video_frame->p_data[indexB]*blue*alpha);
+	canvas->SetPixel(w, h, p[2]*red*alpha, p[1]*green*alpha,p[0]*blue*alpha);
+
+      }	
+    }
+    copying = false;
+
+}
+
+
+void runUVCReceiver()
+{
+    printf("Opening\n");
+    VideoCapture cap(0); // open the default camera
+    if (!cap.isOpened())  // check if we succeeded
+    {
+        printf("ERROR : could not open capture device\n");
+	return;
+    }
+    printf("Opened\n");
+    //Ptr<BackgroundSubtractor> pMOG = new BackgroundSubtractorMOG2();
+
+    Mat fg_mask;
+    Mat frame;
+    int count = -1;
+
+    for (;;)
+    {
+        // Get frame
+        cap >> frame; // get a new frame from camera
+
+        // Update counter
+        ++count;
+	//if (count%2 == 0)
+	//  continue;
+
+        // Background subtraction
+        //pMOG->operator()(frame, fg_mask);
+
+       // imshow("frame", frame);
+	
+   // printf("new frame %d \n", count);
+
+        //imshow("fg_mask", fg_mask);
+
+        // Save foreground mask
+      //  string name = "mask_" + std::to_string(count) + ".png";
+      //  imwrite("D:\\SO\\temp\\" + name, fg_mask);
+//waitKey(1);
+       // if (waitKey(1) >= 0) break;
+       
+       
+       				if(active_frame_ref == &offscreen_canvas1)
+				{
+				  //cout << "copying to frame 2 " << endl;
+				  CopyFrame(&frame, offscreen_canvas2);
+				  active_frame_ref = &offscreen_canvas2;
+				}
+				else
+				{
+				  //cout << "copying to frame 1 " << endl;
+				  CopyFrame(&frame, offscreen_canvas1);
+				  active_frame_ref = &offscreen_canvas1;
+				}
+
+    }
+}
+
+
 
 void runNDIReceiver(std::string sourceName)
 {
@@ -357,7 +458,40 @@ static int usage(const char *progname, const char *msg = nullptr) {
 }
 
 
+void fillCanvas(FrameCanvas * canvas, int R, int G, int B) {
+    for(int h=0; h < canvas->height(); h++)
+    {
+      for(int w=0; w < canvas->width(); w++)
+      {
+	canvas->SetPixel(w, h, R, G, B);
 
+      }	
+    }
+
+}
+void fillRandomSquare(FrameCanvas * canvas, int squareSize, int R, int G, int B) {
+
+    int yPosition = rand() % canvas->height() - squareSize;
+    int xPosition = rand() % canvas->width()  - squareSize;
+
+    for(int h=0; h < canvas->height(); h++)
+    {
+      for(int w=0; w < canvas->width(); w++)
+      {
+	canvas->SetPixel(w, h, 0, 0, 0);
+
+      }	
+    }
+    for(int h = yPosition; h < yPosition + squareSize; h++)
+    {
+      for(int w = xPosition; w < xPosition + squareSize; w++)
+      {
+	canvas->SetPixel(w, h, R, G, B);
+
+      }	
+    }
+
+}
 
 
 void runMatrix()
@@ -367,6 +501,11 @@ void runMatrix()
 	
   offscreen_canvas1 = matrix->CreateFrameCanvas();
   offscreen_canvas2 = matrix->CreateFrameCanvas();  
+  canvas_black = matrix->CreateFrameCanvas();  
+  
+  fillCanvas(canvas_black, 0, 0, 0);
+ // fillRandomSquare(canvas_black, 64, 255, 255, 255);
+  
   active_frame_ref = &offscreen_canvas1;
   printf("Started matrix with resolution : w:%d, h:%d\n", offscreen_canvas1->width(), offscreen_canvas1->height()); 
 
@@ -375,10 +514,10 @@ void runMatrix()
   
 
 //Main loop
-
+  int count = 0;
   printf("Entering main loop thread\n");  
   do {
-
+	count++;
 //	if(copying == false)
 //	{
 		//syncing = true;//TODO : instead of syncing, swap with temporary buffer
@@ -386,8 +525,32 @@ void runMatrix()
 		//{
         		//*active_frame_ref = matrix->SwapOnVSync(*active_frame_ref,
                         //                        	   vsync_multiple);
-			matrix->SwapOnVSync(*active_frame_ref, vsync_multiple);
-			newFrame = true;
+			
+			if(strobe != 0)
+			{
+				if(count < strobe)
+				{
+			    		matrix->SwapOnVSync(*active_frame_ref, vsync_multiple);
+				}
+				else
+				{
+			    		matrix->SwapOnVSync(canvas_black, vsync_multiple);
+
+				}
+				if(count > strobe *2)
+				{
+			    		count = 0;
+					//fillRandomSquare(canvas_black, 64, 255, 255, 255);
+
+				}
+			}
+			else
+			{
+			     matrix->SwapOnVSync(*active_frame_ref, vsync_multiple);
+			
+			}
+
+			//newFrame = true;
 		//}
 		//syncing = false;
 //	}											   
@@ -454,11 +617,12 @@ int main(int argc, char *argv[]) {
   }
 
  
-  OSC_PORT_NUM      = readConfigInt(cfg, "OSC_PORT_NUM");
-  OSC_CONTROL_ALPHA = readConfigString(cfg, "OSC_CONTROL_ALPHA");
-  OSC_CONTROL_RED   = readConfigString(cfg, "OSC_CONTROL_RED");
-  OSC_CONTROL_GREEN = readConfigString(cfg, "OSC_CONTROL_GREEN");
-  OSC_CONTROL_BLUE  = readConfigString(cfg, "OSC_CONTROL_BLUE");
+  OSC_PORT_NUM        = readConfigInt(cfg, "OSC_PORT_NUM");
+  OSC_CONTROL_ALPHA   = readConfigString(cfg, "OSC_CONTROL_ALPHA");
+  OSC_CONTROL_RED     = readConfigString(cfg, "OSC_CONTROL_RED");
+  OSC_CONTROL_GREEN   = readConfigString(cfg, "OSC_CONTROL_GREEN");
+  OSC_CONTROL_BLUE    = readConfigString(cfg, "OSC_CONTROL_BLUE");
+  OSC_CONTROL_STROBE  = readConfigString(cfg, "OSC_CONTROL_STROBE");
 
   OBS_NDI_SOURCE    = readConfigString(cfg, "OBS_NDI_SOURCE");
 
@@ -495,9 +659,12 @@ int main(int argc, char *argv[]) {
   matrixThread.detach();
 
   //Start NDI receive thread
-  std::thread NDIThread (runNDIReceiver, OBS_NDI_SOURCE);  
-  NDIThread.detach();
-
+ // std::thread NDIThread (runNDIReceiver, OBS_NDI_SOURCE);  
+ // NDIThread.detach();
+ 
+  //Start UVC receive thread
+  std::thread UVCThread (runUVCReceiver);  
+  UVCThread.detach();
 
   while(!interrupt_received)
   {
