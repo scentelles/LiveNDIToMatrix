@@ -243,12 +243,16 @@ unsigned char * p = video_frame->ptr(h, w); // Y first, X after
 void runUVCReceiver()
 {
     printf("Opening\n");
+    
     VideoCapture cap(0); // open the default camera
+    
     if (!cap.isOpened())  // check if we succeeded
     {
         printf("ERROR : could not open capture device\n");
 	return;
     }
+    cap.set(CV_CAP_PROP_BUFFERSIZE, 3);
+    
     printf("Opened\n");
     //Ptr<BackgroundSubtractor> pMOG = new BackgroundSubtractorMOG2();
 
