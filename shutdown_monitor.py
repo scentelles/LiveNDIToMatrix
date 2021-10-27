@@ -15,7 +15,7 @@ print("local IP : ", local_ip)
 
 def shutdown_handler(unused_addr, args, value):
   print("OSC message : Shutting down system")
-  os.system("shutdown -h -P -t 0") 
+  os.system("shutdown -h -P now") 
 
 dispatcher = dispatcher.Dispatcher()
 dispatcher.map("/MS/shutdown", shutdown_handler, "Shutdown OSC")
